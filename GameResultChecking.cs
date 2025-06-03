@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 using System.Collections;
@@ -8,6 +8,7 @@ using TMPro;
 public class PlayerResult
 {
     public int player_id;
+    public string session_id;
     public int game_id;
     public int kronus;
     public int lyrion;
@@ -28,14 +29,24 @@ public class RoundResultResponse
 
 public class GameResultChecking : MonoBehaviour
 {
-    public string resultsUrl = "https://1339-213-109-233-127.ngrok-free.app/game-server/get_results.php";
+    private string resultsUrl = "https://ba92-213-109-232-49.ngrok-free.app/game-server/get_results.php";
     public TextMeshProUGUI statusText;
     public float checkInterval = 5f;
-
     private bool isRoundCompleted = false;
+    private int sessionId;
 
     void Start()
     {
+        sessionId = PlayerPrefs.GetInt("session_id", -1);
+
+        if (sessionId == -1)
+        {
+            Debug.LogError("Session ID не знайдено в PlayerPrefs!");
+            statusText.text = "Помилка: сесія не знайдена";
+            SessionManager.Instance.EndSession();
+            return;
+        }
+
         InvokeRepeating(nameof(StartCheckingResults), 0f, checkInterval);
     }
 
@@ -46,13 +57,15 @@ public class GameResultChecking : MonoBehaviour
 
     IEnumerator CheckRoundCompletion()
     {
-        UnityWebRequest www = UnityWebRequest.Get(resultsUrl);
+    string urlWithSession = $"{resultsUrl}?session_id={sessionId}";
+        UnityWebRequest www = UnityWebRequest.Get(urlWithSession);
         yield return www.SendWebRequest();
 
         if (www.result != UnityWebRequest.Result.Success)
         {
             Debug.LogError("Помилка отримання результатів: " + www.error);
             statusText.text = "Помилка підключення до сервера...";
+            SessionManager.Instance.EndSession();
             yield break;
         }
 
@@ -68,6 +81,7 @@ public class GameResultChecking : MonoBehaviour
         if (isRoundCompleted)
         {
             Debug.Log("Раунд завершений — переходимо до результатів!");
+            yield return new WaitForSeconds(1f);
             SceneManager.LoadScene("Results");
         }
     }

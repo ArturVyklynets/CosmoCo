@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
@@ -12,14 +12,15 @@ public class Register : MonoBehaviour
     public Button registerButton;
     public TMP_Text errorText;
 
-    public string serverUrl = "https://1339-213-109-233-127.ngrok-free.app/game-server/register.php";
+    private string serverUrl = "https://ba92-213-109-232-49.ngrok-free.app/game-server/register.php";
+    private string sessionUrl = "https://ba92-213-109-232-49.ngrok-free.app/game-server/get_session.php";
 
     public AudioClip clickSound;
     private AudioSource audioSource;
 
     void Start()
     {
-        audioSource = GetComponent<AudioSource>(); 
+        audioSource = GetComponent<AudioSource>();
         registerButton.onClick.AddListener(OnRegisterClicked);
     }
 
@@ -39,6 +40,19 @@ public class Register : MonoBehaviour
 
     IEnumerator SendRegisterRequest()
     {
+        UnityWebRequest sessionRequest = UnityWebRequest.Get(sessionUrl);
+        yield return sessionRequest.SendWebRequest();
+
+        if (sessionRequest.result != UnityWebRequest.Result.Success)
+        {
+            errorText.text = "Не вдалося отримати сесію!";
+            errorText.color = Color.red;
+            yield break;
+        }
+
+        SessionResponse session = JsonUtility.FromJson<SessionResponse>(sessionRequest.downloadHandler.text);
+        int sessionId = session.session_id;
+
         string fullName = nameInput.text.Trim() + " " + surnameInput.text.Trim();
         if (string.IsNullOrEmpty(fullName.Trim()))
         {
@@ -51,13 +65,14 @@ public class Register : MonoBehaviour
 
         WWWForm form = new WWWForm();
         form.AddField("username", fullName);
+ 
 
         UnityWebRequest www = UnityWebRequest.Post(serverUrl, form);
         yield return www.SendWebRequest();
 
         if (www.result != UnityWebRequest.Result.Success)
         {
-            errorText.text = "Такий гравець вже існує";
+            errorText.text = "Помилка мережі або серверу";
             errorText.color = Color.red;
         }
         else
@@ -75,6 +90,7 @@ public class Register : MonoBehaviour
                 if (response != null && response.player_id > 0)
                 {
                     PlayerPrefs.SetInt("player_id", response.player_id);
+                    PlayerPrefs.SetInt("session_id", response.session_id);
                     PlayerPrefs.Save();
                     SceneManager.LoadScene("Waiting");
                 }
@@ -91,11 +107,18 @@ public class Register : MonoBehaviour
     public class PlayerIdResponse
     {
         public int player_id;
+        public int session_id;
     }
 
     [System.Serializable]
     public class ErrorResponse
     {
         public string error;
+    }
+
+    [System.Serializable]
+    public class SessionResponse
+    {
+        public int session_id;
     }
 }

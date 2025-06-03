@@ -3,78 +3,79 @@ using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 using TMPro;
+using System;
 
 public class GameStartChecker : MonoBehaviour
 {
     public TMP_Text statusText;
     public TMP_Text timerText;
 
-    private float waitTime = 10f;
-    private float checkInterval = 5f;
-
-    private int latestPlayerCount = 0;
-    private string latestMessage = "";
+    private float checkInterval = 1f;
+    private bool gameStarted = false;
 
     private void Start()
     {
-        StartCoroutine(CheckGameStartAfterDelay());
+        StartCoroutine(CheckGameStart());
     }
 
-    private IEnumerator CheckGameStartAfterDelay()
+    private IEnumerator CheckGameStart()
     {
-        float elapsed = 0f;
-
-        while (elapsed < waitTime)
+        while (!gameStarted)
         {
-            using (UnityWebRequest www = UnityWebRequest.Get("https://1339-213-109-233-127.ngrok-free.app/game-server/start_game.php"))
+            using (UnityWebRequest www = UnityWebRequest.Get("https://ba92-213-109-232-49.ngrok-free.app/game-server/start_game.php"))
             {
                 yield return www.SendWebRequest();
 
                 if (www.result == UnityWebRequest.Result.Success)
                 {
                     string json = www.downloadHandler.text;
+                    Debug.Log("Відповідь від сервера: " + json);
+
+                    if (json.Contains("\"error\""))
+                    {
+                        statusText.fontSize = 36f;
+                        statusText.color = Color.red;
+                        statusText.text = "Сервер повернув помилку: " + json;
+                        yield break;
+                    }
+
                     GameStatus status = JsonUtility.FromJson<GameStatus>(json);
 
-                    latestPlayerCount = status.players_count;
-                    latestMessage = status.message;
+                    statusText.text = $"Кількість гравців: {status.players_count}";
+                    timerText.text = $"Час до початку: {Mathf.Ceil(status.time_left)}s";
 
-                    statusText.text = $"РљС–Р»СЊРєС–СЃС‚СЊ РіСЂР°РІС†С–РІ: {latestPlayerCount}\n{latestMessage}";
+                    if (status.can_start)
+                    {
+                        gameStarted = true;
+                        timerText.text = "";
+                        statusText.color = Color.green;
+                        statusText.fontSize = 36f;
+                        statusText.text = "Гра починається!";
+                        yield return new WaitForSeconds(1f);
+                        StartGame();
+                        yield break;
+                    }
+                    if (status.time_left <= 0f && !status.can_start)
+                    {
+                        statusText.color = Color.red;
+                        statusText.fontSize = 36f;
+                        statusText.text = "Недостатня кількість гравців. Спробуйте пізніше.";
+                        SessionManager.Instance.EndSession();
+                        timerText.text = "";
+                        yield break;
+                    }
                 }
                 else
                 {
-                    statusText.text = "";
-                    timerText.text = "";
                     statusText.fontSize = 36f;
                     statusText.color = Color.red;
-                    statusText.text = "РџРѕРјРёР»РєР° РїСЂРёС”РґРЅР°РЅРЅСЏ РґРѕ СЃРµСЂРІРµСЂР°";
+                    statusText.text = "Помилка приєднання до сервера";
+                    SessionManager.Instance.EndSession();
+                    yield break;
                 }
             }
 
-            timerText.text = $"Р§Р°СЃ РґРѕ РїРѕС‡Р°С‚РєСѓ: {Mathf.Ceil(waitTime - elapsed)}s";
-
             yield return new WaitForSeconds(checkInterval);
-            elapsed += checkInterval;
-        }
-
-        timerText.text = "";
-
-        if (latestPlayerCount >= 2)
-        {
-            statusText.text = "";
-            timerText.text = "";
-            statusText.color = Color.green;
-            statusText.fontSize = 36f;
-            statusText.text += "Р“СЂР° РїРѕС‡РёРЅР°С”С‚СЊСЃСЏ!";
-            yield return new WaitForSeconds(1f);
-            StartGame();
-        }
-        else
-        {
-            statusText.text = "";
-            timerText.text = "";
-            statusText.fontSize = 36f;
-            statusText.color = Color.red;
-            statusText.text = "РќРµРґРѕСЃС‚Р°С‚РЅСЏ РєС–Р»СЊРєС–СЃС‚СЊ РіСЂР°РІС†С–РІ. РЎРїСЂРѕР±СѓР№С‚Рµ РїС–Р·РЅС–С€Рµ.";
         }
     }
 
@@ -84,11 +85,11 @@ public class GameStartChecker : MonoBehaviour
         Debug.Log("Game is starting!");
     }
 
-    [System.Serializable]
+    [Serializable]
     private class GameStatus
     {
         public int players_count;
-        public string message;
         public bool can_start;
+        public float time_left;
     }
 }

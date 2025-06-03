@@ -1,4 +1,4 @@
-using TMPro;
+﻿using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Networking;
@@ -15,7 +15,7 @@ public class DroneInputValidator : MonoBehaviour
     public AudioClip failSound;
     public AudioSource audioSource;
 
-    private string submitMoveUrl = "https://1339-213-109-233-127.ngrok-free.app/game-server/submit_move.php";
+    private string submitMoveUrl = "https://ba92-213-109-232-49.ngrok-free.app/game-server/submit_move.php";
 
     void Awake()
     {
@@ -65,9 +65,9 @@ public class DroneInputValidator : MonoBehaviour
         }
 
         int total = kronus + lyrion + mystara + eclipsia + fiora;
-        if (total != 1000)
+        if (total > 1000)
         {
-            errorText.text = $"Сума повинна дорівнювати 1000 (зараз: {total})";
+            errorText.text = $"Сума повинна не перевищувати 1000 (зараз: {total})";
             audioSource.PlayOneShot(failSound);
             return;
         }
@@ -80,6 +80,8 @@ public class DroneInputValidator : MonoBehaviour
     IEnumerator SendMoveToServer(int kronus, int lyrion, int mystara, int eclipsia, int fiora)
     {
         int playerId = PlayerPrefs.GetInt("player_id", -1);
+        int sessionId = PlayerPrefs.GetInt("session_id", -1);
+
         if (playerId == -1)
         {
             Debug.LogError("Player ID не знайдено. Спочатку зареєструйтесь.");
@@ -89,9 +91,19 @@ public class DroneInputValidator : MonoBehaviour
             yield break;
         }
 
+        if (sessionId == -1)
+        {
+            Debug.LogError("Session ID не знайдено. Помилка сесії.");
+            errorText.color = Color.red;
+            errorText.text = "Помилка: сесія не знайдена.";
+            audioSource.PlayOneShot(failSound);
+            yield break;
+        }
+
         var moveData = new MoveData()
         {
             player_id = playerId,
+            session_id = sessionId, 
             Kronus = kronus,
             Lyrion = lyrion,
             Mystara = mystara,
@@ -114,9 +126,15 @@ public class DroneInputValidator : MonoBehaviour
             Debug.Log("Move submitted successfully: " + www.downloadHandler.text);
             errorText.color = Color.green;
             errorText.text = "Успішно! Дані коректні і відправлені на сервер.";
+            PlayerPrefs.SetInt("spawn_kronus", Mathf.CeilToInt(kronus / 100f));
+            PlayerPrefs.SetInt("spawn_lyrion", Mathf.CeilToInt(lyrion / 100f));
+            PlayerPrefs.SetInt("spawn_mystara", Mathf.CeilToInt(mystara / 100f));
+            PlayerPrefs.SetInt("spawn_eclipsia", Mathf.CeilToInt(eclipsia / 100f));
+            PlayerPrefs.SetInt("spawn_fiora", Mathf.CeilToInt(fiora / 100f));
+            PlayerPrefs.Save();
             audioSource.PlayOneShot(successSound);
             yield return new WaitForSeconds(2f);
-            SceneManager.LoadScene("WaitingForAll");
+            SceneManager.LoadScene("DroneVi");
         }
         else
         {
@@ -131,6 +149,7 @@ public class DroneInputValidator : MonoBehaviour
     public class MoveData
     {
         public int player_id;
+        public int session_id;
         public int Kronus;
         public int Lyrion;
         public int Mystara;
